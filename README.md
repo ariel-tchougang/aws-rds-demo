@@ -109,11 +109,6 @@ aws-rds-demo/
 # Clone and setup
 git clone <repository>
 cd aws-rds-demo
-
-# Prepare environment
-./scripts/setup-mission.sh --terraform
-# or
-./scripts/setup-mission.sh --cloudformation
 ```
 
 ### 2. Configure Settings
@@ -153,44 +148,45 @@ Since the RDS instance is in private subnets, you need a workspace to run the DB
 2. Use the provided IAM instance profile: `{project-name}-workspace-profile`
 3. Use security group: `{project-name}-app-sg`
 4. **Optional**: Use the provided user-data script: `scripts/user-data.sh`
-5. SSH to the instance and upload the `application/` folder to `~/mission/`
-6. Run: `cd ~/mission && ./scripts/setup-workspace.sh`
+5. SSH to the instance and upload the `application/` folder
+6. Run: `cd /path/to/application && chmod u+x *.sh`
+7. Run: `./setup.sh`
 
 **Option B: Cloud9 Environment**
 1. Create Cloud9 environment in the VPC
 2. Choose one of the public subnets
 3. Attach the workspace IAM role
-4. Upload the `application/` folder and run setup script
+4. Upload the `application/` folder
+5. Run: `cd /path/to/application && chmod u+x *.sh`
+6. Run: `./setup.sh`
 
 ### 5. Configure Application
 
 ```bash
 # Get RDS endpoint and update configuration
-./scripts/get-rds-endpoint.sh
+./scripts/check-rds.sh
 
-# Or manually edit .env file
-nano .env
 ```
 
 ### 6. Start Mission
 
 ```bash
 # Activate environment and start agent
-mission-activate
+demo-activate
 python db007-agent.py
 
 # Or use the convenience alias
-mission-start
+demo-start
 ```
 
 ### 7. Execute Failover Test
 
 ```bash
 # In another terminal
-mission-failover
+demo-failover
 
 # Or check status first
-mission-status
+demo-status
 ```
 
 ## 🔧 Prerequisites
@@ -231,9 +227,18 @@ mission-status
 
 > 📖 **Detailed mission steps:** See [Mission Brief (English)](mission-multi-az-en.md) or [Brief de Mission (Français)](mission-multi-az-fr.md)
 
+### 🎮 Available Commands
+
+```bash
+demo-activate   # Activate Python environment
+demo-start      # Start DB007 agent
+demo-status     # Check RDS status
+demo-failover   # Trigger controlled failover
+```
+
 ### Phase 1: Reconnaissance
 ```bash
-./scripts/check-status.sh
+demo-status
 ```
 Verify infrastructure status and Multi-AZ configuration.
 
@@ -244,9 +249,15 @@ The DB007 agent continuously:
 - Monitors connection status
 - Publishes CloudWatch metrics
 
+```bash
+demo-activate
+
+demo-start
+```
+
 ### Phase 3: Controlled Sabotage
 ```bash
-./scripts/trigger-failover.sh
+demo-failover
 ```
 Triggers RDS reboot with failover and monitors:
 - Failover initiation
@@ -272,17 +283,14 @@ Triggers RDS reboot with failover and monitors:
 
 ## 🧹 Cleanup
 
-**⚠️ IMPORTANT: Delete your EC2/Cloud9 instance manually before running cleanup!**
-
 ```bash
-# 1. First, terminate your workspace instance manually via AWS Console
-# 2. Then run infrastructure cleanup
-./scripts/cleanup.sh --terraform
-# or
-./scripts/cleanup.sh --cloudformation
+# CloudFormation
+cd cloudformation
+./undeploy.sh
 
-# Force cleanup (no confirmation)
-./scripts/cleanup.sh --terraform --force
+# Terraform
+cd terraform
+./undeploy.sh
 ```
 
 ## 🔍 Troubleshooting
@@ -310,13 +318,10 @@ Triggers RDS reboot with failover and monitors:
 
 ```bash
 # Check RDS status (from workspace)
-mission-status
-
-# Get RDS endpoint
-./scripts/get-rds-endpoint.sh
+demo-status
 
 # Activate virtual environment
-mission-activate
+demo-activate
 
 # Check CloudWatch metrics
 aws cloudwatch list-metrics --namespace "DB007/Mission"
