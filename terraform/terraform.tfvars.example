@@ -1,0 +1,44 @@
+# Mission DB007 - Terraform Configuration Template
+# Copy this file to terraform.tfvars and customize your values
+
+# AWS Configuration
+aws_region = "us-east-1"
+aws_profile = "your-aws-profile"
+
+# Project Configuration
+project_name = "db007-mission"
+
+# Database Configuration
+db_instance_class = "db.t3.micro"
+db_name = "datacorp"
+db_username = "db007"
+db_password = "YourSecurePassword123!"
+
+# CloudWatch Monitoring Configuration
+dashboard_name = "DB007-Mission-Dashboard"
+metric_namespace = "DB007/Mission"
+log_group_name = "/aws/db007/application"
+log_retention_days = 7
+
+# Application Configuration
+app_monitoring_interval = 5
+app_traffic_rate = 10
+failover_timeout = 300
+
+# Network Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# SSH Security Configuration
+# SECURITY WARNING: 0.0.0.0/0 allows SSH from anywhere on the Internet
+# RECOMMENDED: Replace with your public IP address followed by /32
+# Find your IP: https://whatismyipaddress.com/
+# Example: ssh_allowed_cidr = "203.0.113.42/32"
+ssh_allowed_cidr = "0.0.0.0/0"
+
+# Tags
+tags = {
+  Mission     = "DB007"
+  Purpose     = "Multi-AZ-Demonstration"
+  Environment = "Demo"
+  Owner       = "DataCorp"
+}

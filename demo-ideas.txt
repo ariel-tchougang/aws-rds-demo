@@ -1,0 +1,32 @@
+Salut,
+
+J'ai une idée de démo pour illustrer l'intérêt de d'un déploiement RDS Multi AZ
+
+1 - Créer un VPC sur 2 AZ, 
+	2 public subnets
+	1 DB Subnet Group contenant les 2 subnets
+
+2 - Une instance RDS (MySQL, Postgres) Multi-AZ
+
+3 - Une application qui génère et monitore du trafic (input/output) sur la base de données
+
+4 - Contater qu'on a bien une instance primaire dans AZ1, et une stand by dans AZ2
+
+5 - Déclencher un reboot avec failover de l'instance RDS (pour simuler une panne)
+
+6 - Constater une intérruption temporaire de service le temps de la bascule
+
+7 - Constater la promotion de la stand-by en nouvelle primary
+
+8 - Constater la reprise de service
+
+9 - Constater qu'il n'y a pas eu perte de données (par exemple lire les dernières données écrites avant interruption)
+
+10 - Contater qu'on a bien une instance primaire dans AZ2, et une stand by dans AZ1
+
+a - Que penses-tu de ce scénario ? Je la veux simple et à portée éducative.
+
+b - As-tu des propositions pour l'affiner ?
+
+c - As-tu un storytelling qu'on pourrait lui acoller pour le rendre plus sympathique, tout en restant pro ?
+Un truc du genre Agent (Consultant IT) DB007 en mission pour construire un POC pour montrer à DataCorp comment minimiser ses RPO/RTO pour sa base de données hébergée sur AWS. Bref un truc dans le genre...

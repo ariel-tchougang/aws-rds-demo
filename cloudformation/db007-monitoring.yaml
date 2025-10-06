@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Mission DB007 - CloudWatch Monitoring and Dashboard for Multi-AZ RDS demonstration'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'db007-mission'
+    Description: 'Project name for resource tagging'
+  
+  DashboardName:
+    Type: String
+    Default: 'DB007-Mission-Dashboard'
+    Description: 'CloudWatch Dashboard name'
+  
+  MetricNamespace:
+    Type: String
+    Default: 'DB007/Mission'
+    Description: 'Custom metrics namespace'
+  
+  LogGroupName:
+    Type: String
+    Default: '/aws/db007/application'
+    Description: 'CloudWatch Log Group name'
+  
+  LogRetentionDays:
+    Type: Number
+    Default: 7
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: 'Log retention period in days'
+
+Resources:
+  # CloudWatch Log Group for Application Logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref LogGroupName
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${AWS::Region}-log-group'
+        - Key: Mission
+          Value: 'DB007'
+
+  # IAM Role for CloudWatch Metrics and Logs
+  CloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-${AWS::Region}-cloudwatch-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: CustomMetricsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': !Ref MetricNamespace
+
+  # Instance Profile for EC2 instances
+  CloudWatchInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref CloudWatchRole
+
+  # CloudWatch Dashboard
+  MissionDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${DashboardName}-${AWS::Region}-CFN'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${ProjectName}-postgres" ],
+                  [ ".", "CPUUtilization", ".", "." ],
+                  [ ".", "ReadLatency", ".", "." ],
+                  [ ".", "WriteLatency", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "RDS Performance Metrics",
+                "period": 300,
+                "stat": "Average"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "${MetricNamespace}", "DatabaseResponseTime", "Operation", "SELECT" ],
+                  [ ".", ".", ".", "INSERT" ],
+                  [ ".", "DatabaseConnectionStatus", "Status", "Connected" ],
+                  [ ".", ".", ".", "Disconnected" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Application Metrics",
+                "period": 60,
+                "stat": "Average"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "${MetricNamespace}", "FailoverDuration", "Event", "Failover" ],
+                  [ ".", "RecoveryTime", ".", "." ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Failover Metrics",
+                "period": 60,
+                "stat": "Maximum",
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "log",
+              "x": 0,
+              "y": 12,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "query": "SOURCE '${LogGroupName}'\n| fields @timestamp, level, message, operation\n| filter level = \"ERROR\" or level = \"WARN\" or message like /failover/i\n| sort @timestamp desc\n| limit 100",
+                "region": "${AWS::Region}",
+                "title": "Critical Events and Failover Logs",
+                "view": "table"
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarms
+  DatabaseConnectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${AWS::Region}-database-connection-failure'
+      AlarmDescription: 'Alert when database connection fails'
+      MetricName: 'DatabaseConnectionStatus'
+      Namespace: !Ref MetricNamespace
+      Statistic: 'Maximum'
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: 'LessThanThreshold'
+      Dimensions:
+        - Name: 'Status'
+          Value: 'Connected'
+      TreatMissingData: 'breaching'
+
+  HighResponseTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${AWS::Region}-high-response-time'
+      AlarmDescription: 'Alert when database response time is high'
+      MetricName: 'DatabaseResponseTime'
+      Namespace: !Ref MetricNamespace
+      Statistic: 'Average'
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5000
+      ComparisonOperator: 'GreaterThanThreshold'
+      TreatMissingData: 'notBreaching'
+
+  RDSCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${AWS::Region}-rds-high-cpu'
+      AlarmDescription: 'Alert when RDS CPU utilization is high'
+      MetricName: 'CPUUtilization'
+      Namespace: 'AWS/RDS'
+      Statistic: 'Average'
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: 'GreaterThanThreshold'
+      Dimensions:
+        - Name: 'DBInstanceIdentifier'
+          Value: !Sub '${ProjectName}-${AWS::Region}-postgres'
+
+  # SNS Topic for Notifications (optional)
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${AWS::Region}-alerts'
+      DisplayName: 'DB007 Mission Alerts'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${AWS::Region}-alerts-topic'
+        - Key: Mission
+          Value: 'DB007'
+
+Outputs:
+  DashboardURL:
+    Description: 'CloudWatch Dashboard URL'
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${DashboardName}'
+    Export:
+      Name: !Sub '${ProjectName}-${AWS::Region}-dashboard-url'
+
+  LogGroupName:
+    Description: 'CloudWatch Log Group Name'
+    Value: !Ref ApplicationLogGroup
+    Export:
+      Name: !Sub '${ProjectName}-${AWS::Region}-log-group-name'
+
+  CloudWatchRoleArn:
+    Description: 'CloudWatch IAM Role ARN'
+    Value: !GetAtt CloudWatchRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${AWS::Region}-cloudwatch-role-arn'
+
+  InstanceProfileArn:
+    Description: 'Instance Profile ARN for EC2'
+    Value: !GetAtt CloudWatchInstanceProfile.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${AWS::Region}-instance-profile-arn'
+
+  MetricNamespace:
+    Description: 'Custom Metrics Namespace'
+    Value: !Ref MetricNamespace
+    Export:
+      Name: !Sub '${ProjectName}-${AWS::Region}-metric-namespace'
+
+  AlertsTopicArn:
+    Description: 'SNS Topic ARN for Alerts'
+    Value: !Ref AlertsTopic
+    Export:
+      Name: !Sub '${ProjectName}-${AWS::Region}-alerts-topic-arn'
