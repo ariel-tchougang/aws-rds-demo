@@ -149,44 +149,48 @@ Since the RDS instance is in private subnets, you need a workspace to run the DB
 3. Use security group: `{project-name}-app-sg`
 4. **Optional**: Use the provided user-data script: `scripts/user-data.sh`
 5. SSH to the instance and upload the `application/` folder
-6. Run: `cd /path/to/application && chmod u+x *.sh`
-7. Run: `./setup.sh`
 
 **Option B: Cloud9 Environment**
 1. Create Cloud9 environment in the VPC
 2. Choose one of the public subnets
 3. Attach the workspace IAM role
 4. Upload the `application/` folder
-5. Run: `cd /path/to/application && chmod u+x *.sh`
-6. Run: `./setup.sh`
 
 ### 5. Configure Application
 
 ```bash
-# Get RDS endpoint and update configuration
-./scripts/check-rds.sh
+cd /path/to/application
+chmod u+x *.sh
 
+# Linux/macOS/CloudShell
+./setup.sh
 ```
 
 ### 6. Start Mission
 
 ```bash
-# Activate environment and start agent
-demo-activate
-python db007-agent.py
+# Edit .env with RDS endpoint (displayed after deployment)
+nano .env
 
-# Or use the convenience alias
-demo-start
+# Activate environment
+demo-activate
+
+# Start agent with the convenience alias
+demo-start # Or directly with: python db007-agent.py
 ```
 
 ### 7. Execute Failover Test
 
 ```bash
 # In another terminal
-demo-failover
+cd /path/to/application
+source .env
 
-# Or check status first
-demo-status
+# (Optional): Check status first
+demo-status # or ./check-rds.sh
+
+# Trigger failover
+demo-failover # or ./trigger-failover.sh
 ```
 
 ## 🔧 Prerequisites
